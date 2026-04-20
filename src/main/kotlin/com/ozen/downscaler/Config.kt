@@ -38,6 +38,6 @@ data class Config(
             System.getenv(name) ?: default
 
         private fun env(name: String): String? =
-            System.getenv(name)
+            System.getenv(name)?.ifBlank { null }
     }
 }
