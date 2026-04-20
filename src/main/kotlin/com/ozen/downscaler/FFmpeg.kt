@@ -10,9 +10,11 @@ object FFmpeg {
     fun transcode(input: File, output: File, useGpu: Boolean) {
         val cmd = if (useGpu) {
             listOf(
-                "ffmpeg", "-y", "-hwaccel", "cuda", "-i", input.absolutePath,
+                "ffmpeg", "-y",
+                "-hwaccel", "cuda", "-hwaccel_output_format", "cuda",
+                "-i", input.absolutePath,
+                "-vf", "scale_cuda=-2:240",
                 "-c:v", "h264_nvenc", "-preset", "p1", "-cq", "40",
-                "-vf", "scale=-2:240",
                 "-c:a", "copy",
                 "-movflags", "+faststart",
                 "-f", "mp4", output.absolutePath,
