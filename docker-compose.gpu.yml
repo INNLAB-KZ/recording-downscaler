@@ -1,0 +1,33 @@
+services:
+  downscaler:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      RECORDER_API_URL: ${RECORDER_API_URL}
+      RECORDER_API_KEY: ${RECORDER_API_KEY}
+      SPACES_ENDPOINT: ${SPACES_ENDPOINT:-https://fra1.digitaloceanspaces.com}
+      SPACES_BUCKET: ${SPACES_BUCKET:-ozen-recordings}
+      SPACES_KEY: ${SPACES_KEY}
+      SPACES_SECRET: ${SPACES_SECRET}
+      SPACES_FILE_ACL: ${SPACES_FILE_ACL:-private}
+      WORK_DIR: /tmp/downscaler
+      CONCURRENCY: ${CONCURRENCY:-3}
+      POLL_INTERVAL: ${POLL_INTERVAL:-300}
+      VIDEO_QUALITIES: ${VIDEO_QUALITIES:-360p,480p,720p,1080p}
+      USE_GPU: ${USE_GPU:-true}
+      SPACES_CDN_BASE: ${SPACES_CDN_BASE}
+      RECORDING_ID: ${RECORDING_ID:-}
+    volumes:
+      - work:/tmp/downscaler
+
+volumes:
+  work:
