@@ -35,24 +35,35 @@ class RecorderApi(private val baseUrl: String, private val apiKey: String?) {
         return json.decodeFromString<Recording>(response.body())
     }
 
-    fun fetchRecordings(quality: String, limit: Int = 200): List<Recording> {
-        val uri = "$baseUrl/api/recordings?status=done&video_quality=$quality&limit=$limit"
-        logger.info { "Fetching recordings: $uri" }
+    fun fetchRecordingsToProcess(): List<Recording> {
+        val all = mutableListOf<Recording>()
+        var offset = 0
+        val limit = 200
 
-        val request = HttpRequest.newBuilder()
-            .uri(URI.create(uri))
-            .maybeApiKey()
-            .GET()
-            .build()
+        while (true) {
+            val uri = "$baseUrl/api/recordings?status=done&video_quality_ne=240p&limit=$limit&offset=$offset"
+            logger.info { "Fetching recordings: $uri" }
 
-        val response = client.send(request, HttpResponse.BodyHandlers.ofString())
-        if (response.statusCode() != 200) {
-            error("GET $uri returned ${response.statusCode()}: ${response.body()}")
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create(uri))
+                .maybeApiKey()
+                .GET()
+                .build()
+
+            val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+            if (response.statusCode() != 200) {
+                error("GET $uri returned ${response.statusCode()}: ${response.body()}")
+            }
+
+            val page = json.decodeFromString<RecordingsResponse>(response.body())
+            all.addAll(page.data)
+            logger.info { "Fetched ${all.size}/${page.total} recordings" }
+
+            if (all.size >= page.total) break
+            offset += limit
         }
 
-        val page = json.decodeFromString<RecordingsResponse>(response.body())
-        logger.info { "Fetched ${page.data.size}/${page.total} recordings with quality=$quality" }
-        return page.data
+        return all.filter { it.videoQuality != "audio-only" }
     }
 
     fun updateRecording(id: String, quality: String, url: String, s3Key: String, fileSizeBytes: Long) {

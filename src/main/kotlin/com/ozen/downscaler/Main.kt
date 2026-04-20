@@ -27,7 +27,7 @@ fun main() = runBlocking {
         return@runBlocking
     }
 
-    logger.info { "Starting recording-downscaler (concurrency=${config.concurrency}, poll=${config.pollInterval}s, qualities=${config.videoQualities})" }
+    logger.info { "Starting recording-downscaler (concurrency=${config.concurrency}, poll=${config.pollInterval}s)" }
 
     val scope = this
     Runtime.getRuntime().addShutdownHook(Thread {
@@ -54,14 +54,12 @@ private suspend fun CoroutineScope.runPollCycle(
     pipeline: Pipeline,
     api: RecorderApi,
 ) {
-    val recordings = config.videoQualities.flatMap { quality ->
-        try {
-            api.fetchRecordings(quality)
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch recordings for quality=$quality" }
-            emptyList()
-        }
-    }.filter { it.s3Key != null }
+    val recordings = try {
+        api.fetchRecordingsToProcess().filter { it.s3Key != null }
+    } catch (e: Exception) {
+        logger.error(e) { "Failed to fetch recordings" }
+        emptyList()
+    }
 
     if (recordings.isEmpty()) {
         logger.info { "No recordings to process" }
