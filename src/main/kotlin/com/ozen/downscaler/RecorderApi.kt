@@ -50,9 +50,9 @@ class RecorderApi(private val baseUrl: String, private val apiKey: String?) {
             error("GET $uri returned ${response.statusCode()}: ${response.body()}")
         }
 
-        val recordings = json.decodeFromString<List<Recording>>(response.body())
-        logger.info { "Fetched ${recordings.size} recordings with quality=$quality" }
-        return recordings
+        val page = json.decodeFromString<RecordingsResponse>(response.body())
+        logger.info { "Fetched ${page.data.size}/${page.total} recordings with quality=$quality" }
+        return page.data
     }
 
     fun updateRecording(id: String, quality: String, url: String, s3Key: String, fileSizeBytes: Long) {

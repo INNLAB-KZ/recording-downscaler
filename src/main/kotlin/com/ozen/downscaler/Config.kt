@@ -28,7 +28,7 @@ data class Config(
             workDir = env("WORK_DIR", "/tmp/downscaler"),
             concurrency = env("CONCURRENCY", "3").toInt(),
             pollInterval = env("POLL_INTERVAL", "300").toLong(),
-            videoQualities = env("VIDEO_QUALITIES", "360p,480p,720p,1080p").split(","),
+            videoQualities = env("VIDEO_QUALITIES", "null,360p,480p,720p,1080p").split(","),
             useGpu = env("USE_GPU", "false").toBoolean(),
             spacesCdnBase = env("SPACES_CDN_BASE", "https://ozen-recordings.fra1.cdn.digitaloceanspaces.com"),
             recordingId = env("RECORDING_ID"),

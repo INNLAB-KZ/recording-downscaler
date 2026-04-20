@@ -15,3 +15,11 @@ data class Recording(
     @SerialName("audio_quality") val audioQuality: String? = null,
     val status: String,
 )
+
+@Serializable
+data class RecordingsResponse(
+    val data: List<Recording>,
+    val total: Int,
+    val limit: Int,
+    val offset: Int,
+)
