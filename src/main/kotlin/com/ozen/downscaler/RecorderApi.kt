@@ -41,7 +41,7 @@ class RecorderApi(private val baseUrl: String, private val apiKey: String?) {
         val limit = 200
 
         while (true) {
-            val uri = "$baseUrl/api/recordings?status=done&video_quality_ne=240p&limit=$limit&offset=$offset"
+            val uri = "$baseUrl/api/recordings?status=done&video_quality_ne=108p&limit=$limit&offset=$offset"
             logger.info { "Fetching recordings: $uri" }
 
             val request = HttpRequest.newBuilder()
@@ -66,6 +66,37 @@ class RecorderApi(private val baseUrl: String, private val apiKey: String?) {
         return all.filter { it.videoQuality != "audio-only" }
     }
 
+    fun fetchRecordingsWithAudio(): List<Recording> {
+        val all = mutableListOf<Recording>()
+        var offset = 0
+        val limit = 200
+
+        while (true) {
+            val uri = "$baseUrl/api/recordings?status=done&audio_s3_key_exists=true&limit=$limit&offset=$offset"
+            logger.info { "Fetching recordings with audio_s3_key: $uri" }
+
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create(uri))
+                .maybeApiKey()
+                .GET()
+                .build()
+
+            val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+            if (response.statusCode() != 200) {
+                error("GET $uri returned ${response.statusCode()}: ${response.body()}")
+            }
+
+            val page = json.decodeFromString<RecordingsResponse>(response.body())
+            all.addAll(page.data)
+            logger.info { "Fetched ${all.size}/${page.total} recordings with audio_s3_key" }
+
+            if (all.size >= page.total) break
+            offset += limit
+        }
+
+        return all.filter { it.audioS3Key != null && it.videoQuality != "audio-only" }
+    }
+
     fun updateRecording(id: String, quality: String, url: String, s3Key: String, fileSizeBytes: Long) {
         val uri = "$baseUrl/api/recordings/$id"
         val body = """{"video_quality":"$quality","url":"$url","s3_key":"$s3Key","file_size_bytes":$fileSizeBytes}"""
@@ -83,5 +114,24 @@ class RecorderApi(private val baseUrl: String, private val apiKey: String?) {
         }
 
         logger.info { "Updated recording $id video_quality=$quality url=$url file_size_bytes=$fileSizeBytes" }
+    }
+
+    fun updateRecordingAudio(id: String, audioQuality: String, audioUrl: String, audioS3Key: String, audioFileSizeBytes: Long) {
+        val uri = "$baseUrl/api/recordings/$id"
+        val body = """{"audio_quality":"$audioQuality","audio_url":"$audioUrl","audio_s3_key":"$audioS3Key","audio_file_size_bytes":$audioFileSizeBytes}"""
+
+        val request = HttpRequest.newBuilder()
+            .uri(URI.create(uri))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
+            .header("Content-Type", "application/json")
+            .maybeApiKey()
+            .build()
+
+        val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+        if (response.statusCode() !in 200..299) {
+            error("PATCH $uri returned ${response.statusCode()}: ${response.body()}")
+        }
+
+        logger.info { "Updated recording $id audio_quality=$audioQuality audio_url=$audioUrl audio_file_size_bytes=$audioFileSizeBytes" }
     }
 }

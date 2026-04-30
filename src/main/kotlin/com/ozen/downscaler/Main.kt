@@ -38,6 +38,7 @@ fun main() = runBlocking {
     try {
         while (isActive) {
             runPollCycle(config, pipeline, api)
+            runAudioPollCycle(config, pipeline, api)
             logger.info { "Sleeping ${config.pollInterval}s until next cycle" }
             delay(config.pollInterval * 1000)
         }
@@ -84,4 +85,41 @@ private suspend fun CoroutineScope.runPollCycle(
     }.joinAll()
 
     logger.info { "Poll cycle complete, processed ${recordings.size} recordings" }
+}
+
+private suspend fun CoroutineScope.runAudioPollCycle(
+    config: Config,
+    pipeline: Pipeline,
+    api: RecorderApi,
+) {
+    val recordings = try {
+        api.fetchRecordingsWithAudio().filter { it.s3Key != null }
+    } catch (e: Exception) {
+        logger.error(e) { "Failed to fetch recordings for audio check" }
+        emptyList()
+    }
+
+    if (recordings.isEmpty()) {
+        logger.info { "No recordings with missing audio" }
+        return
+    }
+
+    logger.info { "Found ${recordings.size} recordings with missing audio" }
+
+    val semaphore = Semaphore(config.concurrency)
+    recordings.map { recording ->
+        launch {
+            semaphore.withPermit {
+                try {
+                    pipeline.processRecordingAudio(recording)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to process audio for recording ${recording.id}" }
+                }
+            }
+        }
+    }.joinAll()
+
+    logger.info { "Audio poll cycle complete, processed ${recordings.size} recordings" }
 }

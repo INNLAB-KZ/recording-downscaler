@@ -16,7 +16,7 @@ class S3Storage(private val config: Config) {
     private val logger = KotlinLogging.logger {}
     private val partSize = 64L * 1024 * 1024 // 64 MB
 
-    private val client = S3Client {
+    private val sourceClient = S3Client {
         region = "fra1"
         endpointUrl = Url.parse(config.spacesEndpoint)
         credentialsProvider = StaticCredentialsProvider(
@@ -25,9 +25,18 @@ class S3Storage(private val config: Config) {
         forcePathStyle = true
     }
 
+    private val destClient = S3Client {
+        region = "fra1"
+        endpointUrl = Url.parse(config.destEndpoint)
+        credentialsProvider = StaticCredentialsProvider(
+            Credentials(config.destKey, config.destSecret)
+        )
+        forcePathStyle = true
+    }
+
     suspend fun download(s3Key: String, destination: File) {
         logger.info { "Downloading s3://${config.spacesBucket}/$s3Key" }
-        client.getObject(GetObjectRequest {
+        sourceClient.getObject(GetObjectRequest {
             bucket = config.spacesBucket
             key = s3Key
         }) { resp ->
@@ -39,13 +48,13 @@ class S3Storage(private val config: Config) {
 
     suspend fun upload(s3Key: String, file: File, contentType: String = "video/mp4") {
         val fileSize = file.length()
-        logger.info { "Uploading ${file.name} ($fileSize bytes) to s3://${config.spacesBucket}/$s3Key" }
+        logger.info { "Uploading ${file.name} ($fileSize bytes) to s3://${config.destBucket}/$s3Key" }
 
         if (fileSize <= partSize) {
-            client.putObject(PutObjectRequest {
-                bucket = config.spacesBucket
+            destClient.putObject(PutObjectRequest {
+                bucket = config.destBucket
                 key = s3Key
-                acl = ObjectCannedAcl.fromValue(config.spacesFileAcl)
+                acl = ObjectCannedAcl.fromValue(config.destFileAcl)
                 this.contentType = contentType
                 body = ByteStream.fromFile(file)
             })
@@ -57,17 +66,17 @@ class S3Storage(private val config: Config) {
 
     suspend fun delete(s3Key: String) {
         logger.info { "Deleting s3://${config.spacesBucket}/$s3Key" }
-        client.deleteObject(DeleteObjectRequest {
+        sourceClient.deleteObject(DeleteObjectRequest {
             bucket = config.spacesBucket
             key = s3Key
         })
     }
 
     private suspend fun multipartUpload(s3Key: String, file: File, fileSize: Long, contentType: String) {
-        val createResp = client.createMultipartUpload(CreateMultipartUploadRequest {
-            bucket = config.spacesBucket
+        val createResp = destClient.createMultipartUpload(CreateMultipartUploadRequest {
+            bucket = config.destBucket
             key = s3Key
-            acl = ObjectCannedAcl.fromValue(config.spacesFileAcl)
+            acl = ObjectCannedAcl.fromValue(config.destFileAcl)
             this.contentType = contentType
         })
         val uploadId = createResp.uploadId ?: error("No uploadId returned")
@@ -83,8 +92,8 @@ class S3Storage(private val config: Config) {
                     val size = minOf(partSize, remaining).toInt()
                     val bytes = input.readNBytes(size)
 
-                    val partResp = client.uploadPart(UploadPartRequest {
-                        this.bucket = config.spacesBucket
+                    val partResp = destClient.uploadPart(UploadPartRequest {
+                        this.bucket = config.destBucket
                         this.key = s3Key
                         this.uploadId = uploadId
                         this.partNumber = partNumber
@@ -102,8 +111,8 @@ class S3Storage(private val config: Config) {
                 }
             }
 
-            client.completeMultipartUpload(CompleteMultipartUploadRequest {
-                this.bucket = config.spacesBucket
+            destClient.completeMultipartUpload(CompleteMultipartUploadRequest {
+                this.bucket = config.destBucket
                 this.key = s3Key
                 this.uploadId = uploadId
                 this.multipartUpload = CompletedMultipartUpload {
@@ -112,8 +121,8 @@ class S3Storage(private val config: Config) {
             })
         } catch (e: Exception) {
             logger.error(e) { "Multipart upload failed, aborting" }
-            client.abortMultipartUpload(AbortMultipartUploadRequest {
-                this.bucket = config.spacesBucket
+            destClient.abortMultipartUpload(AbortMultipartUploadRequest {
+                this.bucket = config.destBucket
                 this.key = s3Key
                 this.uploadId = uploadId
             })
@@ -121,15 +130,30 @@ class S3Storage(private val config: Config) {
         }
     }
 
+    suspend fun exists(s3Key: String): Boolean {
+        return try {
+            destClient.headObject(HeadObjectRequest {
+                bucket = config.destBucket
+                key = s3Key
+            })
+            true
+        } catch (e: aws.sdk.kotlin.services.s3.model.NotFound) {
+            false
+        } catch (e: aws.sdk.kotlin.services.s3.model.NoSuchKey) {
+            false
+        }
+    }
+
     suspend fun headObjectSize(s3Key: String): Long {
-        val resp = client.headObject(HeadObjectRequest {
-            bucket = config.spacesBucket
+        val resp = destClient.headObject(HeadObjectRequest {
+            bucket = config.destBucket
             key = s3Key
         })
         return resp.contentLength ?: 0L
     }
 
     fun close() {
-        client.close()
+        sourceClient.close()
+        destClient.close()
     }
 }

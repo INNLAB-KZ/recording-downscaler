@@ -17,3 +17,4 @@ ENTRYPOINT ["java", "-Xmx512m", "-jar", "app.jar"]
 #
 # Multi-platform (amd64 + arm64):
 #   docker buildx build --platform linux/amd64,linux/arm64 -t innlabkz/recording-downscaler:latest --push .
+#   docker buildx build --platform linux/amd64 -t innlabkz/recording-downscaler:latest --push .
