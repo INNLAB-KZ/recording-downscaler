@@ -23,6 +23,11 @@ class Pipeline(
         val outputFile = File(config.workDir, "${id}_output.mp4")
 
         try {
+            if (!s3.sourceExists(oldS3Key)) {
+                logger.info { "[$id] Source file not found in S3: $oldS3Key, skipping" }
+                return
+            }
+
             logger.info { "[$id] Downloading $oldS3Key" }
             s3.download(oldS3Key, inputFile)
             logger.info { "[$id] Downloaded ${inputFile.length()} bytes" }
@@ -99,6 +104,11 @@ class Pipeline(
         val outputFile = File(config.workDir, "${id}_audio_output.aac")
 
         try {
+            if (!s3.sourceExists(videoS3Key)) {
+                logger.info { "[$id] Source video not found in S3: $videoS3Key, skipping" }
+                return
+            }
+
             logger.info { "[$id] Downloading $videoS3Key for audio extraction" }
             s3.download(videoS3Key, inputFile)
             logger.info { "[$id] Downloaded ${inputFile.length()} bytes" }

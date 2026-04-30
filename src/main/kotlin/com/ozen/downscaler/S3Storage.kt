@@ -130,6 +130,20 @@ class S3Storage(private val config: Config) {
         }
     }
 
+    suspend fun sourceExists(s3Key: String): Boolean {
+        return try {
+            sourceClient.headObject(HeadObjectRequest {
+                bucket = config.spacesBucket
+                key = s3Key
+            })
+            true
+        } catch (e: aws.sdk.kotlin.services.s3.model.NotFound) {
+            false
+        } catch (e: aws.sdk.kotlin.services.s3.model.NoSuchKey) {
+            false
+        }
+    }
+
     suspend fun exists(s3Key: String): Boolean {
         return try {
             destClient.headObject(HeadObjectRequest {
